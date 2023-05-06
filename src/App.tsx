@@ -1,6 +1,7 @@
 import React, {useState} from 'react';
 import {Chessboard} from 'react-chessboard';
 import {Chess, Square} from 'chess.js';
+import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
 function App(): JSX.Element {
@@ -44,16 +45,23 @@ function App(): JSX.Element {
     };
     return (
         <div
+            className="container"
             style={{
                 height: '100vh',
-                width: '100vh',
+                width: '100vw',
                 }}
         >
-            <Chessboard
-                position={fen}
-                onPieceDrop={handleMove}/>
-            <div style={{backgroundColor: '#2e3440', height: '100vh'}}>
-                <FeedbackBox>{feedback}</FeedbackBox>
+            <div className="row">
+                <div className="col">
+                    <Chessboard
+                        position={fen}
+                        onPieceDrop={handleMove}/>
+                </div>
+                <div
+                    className="col"
+                    style={{backgroundColor: '#2e3440', height: '100vh'}}>
+                    <FeedbackBox>{feedback}</FeedbackBox>
+                </div>
             </div>
         </div>
     );
