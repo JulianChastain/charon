@@ -81,3 +81,5 @@ class Puzzle {
 }
 
 export {LinearMoveSequence, Mv, Puzzle};
+
+

@@ -1,55 +1,77 @@
-import React, {useEffect, useState} from 'react';
-import {Chessboard} from 'react-chessboard';
-import {Chess, DEFAULT_POSITION, Move, Square, validateFen} from 'chess.js';
-import {MoveSequence, LinearMoveSequence, MoveHandler, Puzzle} from '../utils/classesAndTypes';
-import {GameState} from "../components/GameState";
+import React, {useEffect, useReducer, useState} from 'react';
+import {Chess, Move, Square, validateFen} from 'chess.js';
+import {LinearMoveSequence, MoveHandler, MoveSequence, Mv, Puzzle} from '../utils/classesAndTypes';
 import {GameBoard} from "../components/GameBoard";
+import {FeedbackBox} from "../components/FeedbackBox";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import '../styles/App.css';
-
-
-
+import {GameState} from "../components/GameState";
+import {NewState, Reducer, State} from "../utils/reducer";
 
 
 function App(): JSX.Element {
-    const [[game, boardFen], setGameAndFen] = useState([new Chess(), 'start']);
-    const [feedback, setFeedback] = useState('White to move');
-    const [handler, setHandler] = useState<MoveHandler>(() => handleMove);
-    const [[startPos, moves], setPuzzle] = useState<[string, MoveSequence]>(["", new LinearMoveSequence([])]);
-    const gameRef = React.useRef(game);
-    useEffect(() => {
-        gameRef.current = game;
-    }, [game]);
+    //Use reducer to manage all board related state
+    const [{Game, Fen, Orientation, CurPuzzle, Puzzles, PuzzleMode, Feedback} , dispatch] = useReducer(Reducer, NewState());
+    const [handler, setHandler] = useState<MoveHandler>(handleMove);
 
-
-
-    function AddPuzzle(): MoveHandler {
-        setFeedback("only linear puzzle supported currently")
-        const startPos = gameRef.current.fen();
-        return (startSquare: Square, endSquare: Square): boolean => {
-            if (startSquare == undefined || endSquare == undefined)
-                return false;
-            try {
-                const move: Move = gameRef.current.move({from: startSquare, to: endSquare});
-                if (move === null) {
-                    return false;
-                }
-                setFeedback((feedback) => (feedback[0] === 'o'?move.san:feedback + ', ' + move.san));
-                setGameAndFen([gameRef.current, gameRef.current.fen()]);
-                setPuzzle(([startPos, moves]) => {
-                    moves.Add({from: startSquare, to: endSquare});
-                    return [startPos, moves];
-                })
-                return true;
-            } catch (e) {
+    function AddPuzzle({startFen}: {startFen:string}){
+        // @ts-ignore
+        dispatch({Feedback: "Only linear puzzles are supported right now"})
+        // @ts-ignore
+        dispatch({PuzzleMode: true});
+        const handler = (startSquare: Square, endSquare: Square): boolean => {
+            if (startSquare == undefined || endSquare == undefined){
+                console.log("rejected move because start or end square was undefined")
                 return false;
             }
+            const move = Game.move({from: startSquare, to: endSquare});
+            if (move == null){
+                console.log("rejected move because move was null")
+                return false;
+            }
+            // @ts-ignore
+            dispatch({Move: move});
+            return true;
         }
+        setHandler(handler);
+        return null
+    }
+
+    function ControlPanel({game, fen}: {game: Chess, fen: string}): JSX.Element {
+        return (
+            <div className={'rowItem row'}>
+                <input
+                    type="text"
+                    value={fen}
+                    onChange={(e) => {
+                        if(!validateFen(e.target.value)) {
+                            // @ts-ignore
+                            dispatch({Feedback: "Invalid FEN"});
+                        } else {
+                            // @ts-ignore
+                            dispatch({Fen: e.target.value});
+                            // @ts-ignore
+                            dispatch({Feedback: game.turn() === 'w' ? 'White to move' : 'Black to move'})
+                        }
+                    }}
+                />
+                <button
+                    onClick={() => {
+                        console.log("Setting fen to " + fen)
+                        AddPuzzle({startFen: fen});
+                    }}
+                >Enter Puzzle Creation Mode
+                </button>
+                <button>Finish Puzzle</button>
+                <button>Load Puzzle</button>
+                <GameState game={game} boardFen={fen}></GameState>
+            </div>
+        );
     }
 
     function QuizPuzzle(puz: Puzzle): void {
         const currentPosition = puz.moves[Symbol.iterator]();
-        setGameAndFen([new Chess(puz.startPos), puz.startPos]);
+        SetGameFen(puz.startPos);
         game.turn() === 'w' ? setFeedback('White to move') : setFeedback('Black to move');
         const puzzleHandler: MoveHandler = (startSquare: Square, endSquare: Square): boolean => {
             let nextMove = currentPosition.next();
@@ -62,73 +84,21 @@ function App(): JSX.Element {
                 return false;
             }
             const nextMoves = puz.moves.Children({from: startSquare, to: endSquare});
-            if (nextMoves === "Out of sequence error") {
+            if (nextMoves === "Out of sequence error" || nextMoves.Move === "Out of sequence error") {
                 setFeedback("That's not right!");
                 return false;
             }
-            const move: Move = game.move(nextMoves.Move);
+            const move = GameMove(nextMoves.Move);
             if (move === null) {
                 setFeedback("This puzzle contained an incorrect move!");
                 return false;
             }
-            setGameAndFen([game, game.fen()]);
             setFeedback(game.turn() === 'w' ? 'White to move' : 'Black to move');
             return true;
         }
-        setHandler(puzzleHandler)
+        setHandler(() => puzzleHandler)
     }
 
-
-    function FenInput({game, boardFen}: {game: Chess, boardFen: string}): JSX.Element {
-        return (
-            <div className={'rowItem row'}>
-                <input
-                    type="text"
-                    value={boardFen}
-                    onChange={(e) => {
-                        if (validateFen(e.target.value)) {
-                            setGameAndFen([new Chess(e.target.value), e.target.value]);
-                            setFeedback(game.turn() === 'w' ? 'White to move' : 'Black to move');
-                        }
-
-                    }}
-                />
-                <button
-                    onClick={() => {
-                        console.log("Setting fen to " + boardFen)
-                        setGameAndFen([new Chess(boardFen), boardFen]);
-                        setFeedback(game.turn() === 'w' ? 'White to move' : 'Black to move');
-                        setHandler(AddPuzzle())
-                    }}
-                >Enter Puzzle Creation Mode
-                </button>
-                <button>Finish Puzzle</button>
-                <button>Load Puzzle</button>
-                <GameState game={game} boardFen={boardFen}></GameState>
-            </div>
-        );
-    }
-
-    function FeedbackBox({
-                             children
-                         }
-                             :
-                             {
-                                 children: string
-                             }
-    ):
-        JSX.Element {
-        return (
-            <div
-                className={'rowItem'}
-                style={{
-                    borderStyle: 'solid',
-                }}
-            >
-                {children}
-            </div>
-        );
-    }
 
     function handleMove(startSquare: Square, endSquare: Square): boolean {
         console.log('Handling move ' + startSquare + endSquare)
@@ -141,21 +111,21 @@ function App(): JSX.Element {
                 console.log('Handled move, exited early')
                 return false;
             }
-            const moveResult: Move = gameRef.current.move({from: startSquare, to: endSquare})
+            let [moveResult,gm] = GameMove({from: startSquare, to: endSquare});
+            setFen(gm.fen());
             if (moveResult === null) {
                 setFeedback('Invalid move!');
                 console.log('Handled move, encountered null move')
                 return false
             } else {
-                setGameAndFen([gameRef.current, gameRef.current.fen()]);
                 setFeedback(moveResult.san);
-                console.log('Handled move, should have given SAN')
+                console.log('Handled move, should have given SAN in feedback')
                 return true
             }
 
         } catch (e) {
             setFeedback('Invalid move!');
-            console.log(gameRef.current.fen())
+            console.log(fen)
             console.log('caught error(s):')
             console.log(e)
             return false;
@@ -172,7 +142,7 @@ function App(): JSX.Element {
         >
             <div className="row">
                 <div className="col-9">
-                    <GameBoard boardFen={boardFen} handler={handler}/>
+                    <GameBoard boardFen={fen} handler={handleMove}/>
                 </div>
                 <div
                     className="col-3"
@@ -181,7 +151,7 @@ function App(): JSX.Element {
                         <FeedbackBox>{feedback}</FeedbackBox>
                     </div>
                     <div className="row">
-                        <FenInput boardFen={boardFen} game={game}/>
+                        <ControlPanel game={game} fen={fen}/>
                     </div>
                 </div>
             </div>
