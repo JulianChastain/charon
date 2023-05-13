@@ -1,12 +1,12 @@
-import React, {useEffect, useReducer, useState} from 'react';
-import {Chess, Move, Square, validateFen} from 'chess.js';
-import {LinearMoveSequence, MoveHandler, MoveSequence, Mv, Puzzle} from '../utils/classesAndTypes';
+import React, {useReducer, useState} from 'react';
+import {Chess, Square, validateFen} from 'chess.js';
+import {MoveHandler} from '../utils/classesAndTypes';
 import {GameBoard} from "../components/GameBoard";
 import {FeedbackBox} from "../components/FeedbackBox";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import '../styles/App.css';
 import {GameState} from "../components/GameState";
-import {NewState, Reducer, State} from "../utils/reducer";
+import {NewState, Reducer} from "../utils/reducer";
 
 
 function App(): JSX.Element {
@@ -69,34 +69,40 @@ function App(): JSX.Element {
         );
     }
 
-    function QuizPuzzle(puz: Puzzle): void {
+    function QuizPuzzle(): void {
+        let puz = CurPuzzle
         const currentPosition = puz.moves[Symbol.iterator]();
-        SetGameFen(puz.startPos);
-        game.turn() === 'w' ? setFeedback('White to move') : setFeedback('Black to move');
+        // @ts-ignore
+        dispatch({PuzzleMode: false})
+        // @ts-ignore
+        dispatch({Fen: puz.startPos})
+        // @ts-ignore
+        dispatch({Feedback: game.turn() === 'w' ? 'White to move' : 'Black to move'})
         const puzzleHandler: MoveHandler = (startSquare: Square, endSquare: Square): boolean => {
             let nextMove = currentPosition.next();
             if (nextMove.done) {
-                setFeedback("You solved the puzzle!");
+                // @ts-ignore
+                dispatch({Feedback: "Puzzle complete!"});
                 return false;
             }
             if (nextMove.value.from !== startSquare || nextMove.value.to !== endSquare) {
-                setFeedback("That's not right!");
+                // @ts-ignore
+                dispatch({Feedback: "Incorrect"});
                 return false;
             }
             const nextMoves = puz.moves.Children({from: startSquare, to: endSquare});
             if (nextMoves === "Out of sequence error" || nextMoves.Move === "Out of sequence error") {
-                setFeedback("That's not right!");
+                // @ts-ignore
+                dispatch({Feedback: "Incorrect"});
                 return false;
             }
-            const move = GameMove(nextMoves.Move);
-            if (move === null) {
-                setFeedback("This puzzle contained an incorrect move!");
-                return false;
-            }
-            setFeedback(game.turn() === 'w' ? 'White to move' : 'Black to move');
+            // @ts-ignore
+            dispatch({Move: nextMoves.Move});
+            // @ts-ignore
+            dispatch({Feedback: nextMoves.san})
             return true;
         }
-        setHandler(() => puzzleHandler)
+        setHandler(puzzleHandler)
     }
 
 
@@ -104,30 +110,21 @@ function App(): JSX.Element {
         console.log('Handling move ' + startSquare + endSquare)
         try {
             if (startSquare === undefined || endSquare === undefined) {
-                if (game === undefined)
-                    setFeedback('Enter a valid fen');
+                if (Game === undefined)
+                    // @ts-ignore
+                    dispatch({Feedback: 'Enter a valid fen'});
                 else
-                    setFeedback(game.turn() === 'w' ? 'White to move' : 'Black to move');
-                console.log('Handled move, exited early')
+                    // @ts-ignore
+                    dispatch({Feedback: game.turn() === 'w' ? 'White to move' : 'Black to move'});
                 return false;
             }
-            let [moveResult,gm] = GameMove({from: startSquare, to: endSquare});
-            setFen(gm.fen());
-            if (moveResult === null) {
-                setFeedback('Invalid move!');
-                console.log('Handled move, encountered null move')
-                return false
-            } else {
-                setFeedback(moveResult.san);
-                console.log('Handled move, should have given SAN in feedback')
-                return true
-            }
+            // @ts-ignore
+            dispatch({Feedback: game.turn() === 'w' ? 'White to move' : 'Black to move'});
+            return true;
 
         } catch (e) {
-            setFeedback('Invalid move!');
-            console.log(fen)
-            console.log('caught error(s):')
-            console.log(e)
+            // @ts-ignore
+            dispatch({Feedback: 'Invalid move'});
             return false;
         }
     }
@@ -142,16 +139,16 @@ function App(): JSX.Element {
         >
             <div className="row">
                 <div className="col-9">
-                    <GameBoard boardFen={fen} handler={handleMove}/>
+                    <GameBoard boardFen={Fen} handler={handleMove}/>
                 </div>
                 <div
                     className="col-3"
                     style={{backgroundColor: '#2e3440'}}>
                     <div className="row">
-                        <FeedbackBox>{feedback}</FeedbackBox>
+                        <FeedbackBox>{Feedback}</FeedbackBox>
                     </div>
                     <div className="row">
-                        <ControlPanel game={game} fen={fen}/>
+                        <ControlPanel game={Game} fen={Fen}/>
                     </div>
                 </div>
             </div>
