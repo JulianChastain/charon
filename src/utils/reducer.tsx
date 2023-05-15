@@ -12,7 +12,7 @@ export type State = {
     Feedback: string;
 }
 
-type Action = {
+export type Action = {
     Fen: string ;
     PuzzleMode: boolean ;
     Move: Move ;
@@ -61,6 +61,7 @@ function dispatchOrientation(old: State, {Orientation}: Action){
     return {...old, Orientation:Orientation}
 }
 
+
 export function Reducer(old: State, action: Action): State {
     if (action.Fen !== undefined){
         return dispatchBoardState(old, action);
@@ -81,6 +82,15 @@ export function Reducer(old: State, action: Action): State {
     }
 }
 
+function handleFactory(fen: string = 'start'){
+    const Game = new Chess(fen)
+    return function handleMove(move: Mv){
+
+    }
+
+
+}
+
 export function NewState(): State {
     return {
         Game: new Chess(),
@@ -89,6 +99,6 @@ export function NewState(): State {
         CurPuzzle: new Puzzle(new LinearMoveSequence([])),
         Puzzles: [],
         PuzzleMode: false,
-        Feedback: 'White to move'
+        Feedback: 'White to move',
     }
 }
