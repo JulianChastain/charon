@@ -1,104 +1,121 @@
-import {Chess, Move} from "chess.js";
+import {Chess} from "chess.js";
 import {LinearMoveSequence, Mv, Puzzle} from "./classesAndTypes";
-import Feedback from "react-bootstrap/Feedback";
 
 export type State = {
     Game: Chess;
-    Fen: string;
     Orientation: boolean;
     CurPuzzle: Puzzle;
     Puzzles: Puzzle[];
     PuzzleMode: boolean;
     Feedback: string;
+    Input: string;
 }
 
 export type Action = {
-    Fen: string ;
-    PuzzleMode: boolean ;
-    Move: Move ;
-    Feedback: string ;
-    Puzzles: Puzzle[] ;
-    PuzzleIdx: number ;
+    Fen: string;
+    PuzzleMode: boolean;
+    Move: Mv;
+    Feedback: string;
+    Puzzles: Puzzle[];
+    PuzzleIdx: number;
     Orientation: boolean;
+    Input: string;
 }
 
-function dispatchBoardState(old: State, {Fen}: Action){
-    console.log("Dispatching to board state")
-    if (old.PuzzleMode){
+function dispatchBoardState(old: State, {Fen}: Action) {
+    try {
+        const game = new Chess(Fen)
+        console.log("FEN is valid")
+        if (old.PuzzleMode) {
+            // @ts-ignore
+            old = dispatchAddPuzzle(old, {Puzzles: [old.CurPuzzle]})
+            old = {...old, CurPuzzle: new Puzzle(new LinearMoveSequence([]), Fen)}
+        }
+        return {...old, Game: game}
+    } catch (e) {
         // @ts-ignore
-        old = dispatchAddPuzzle(old, {Puzzles:[old.CurPuzzle]})
-        old = {...old, CurPuzzle:new Puzzle(new LinearMoveSequence([]), Fen)}
+        return dispatchFeedback(old, {Feedback: error})
     }
-    old.Game.load(Fen.toString());
-    return {...old, Fen:Fen, Game:old.Game}
 }
 
-function dispatchPuzzleMode(old: State, {PuzzleMode}: Action){
-    if (PuzzleMode && !old.PuzzleMode){
-        old = {...old, CurPuzzle:new Puzzle(new LinearMoveSequence([]), old.Fen)}
+function dispatchPuzzleMode(old: State, {PuzzleMode}: Action) {
+    if (PuzzleMode && !old.PuzzleMode) {
+        old = {...old, CurPuzzle: new Puzzle(new LinearMoveSequence([]), old.Game.fen())}
     }
-    return {...old, PuzzleMove:PuzzleMode}
+    return {...old, PuzzleMove: PuzzleMode}
 }
 
-function dispatchMove(old: State, {Move}: Action){
-    old.Game.move(Move);
-    return {...old, Game:old.Game, Fen:old.Game.fen()}
+function dispatchMove(old: State, {Move}: Action) {
+    if (Move.validFor(old.Game))
+        try {
+            old.Game.move(Move);
+            console.log('Verified move, new state is ' + old.Game.fen())
+            return {...old, Game: old.Game, Fen: old.Game.fen()}
+        } catch (e) {
+            console.log("Couldn't make the move " + Move.from + Move.to + " in state " + old.Game.fen())
+            return old
+        }
+    else {
+        console.log("Couldn't find the move " + Move.from + Move.to + " in state " + old.Game.fen())
+        return old
+    }
+
 }
 
-function dispatchFeedback(old: State, {Feedback}: Action){
-    return {...old, Feedback:Feedback}
+function dispatchFeedback(old: State, {Feedback}: Action) {
+    return {...old, Feedback: Feedback}
 }
 
-function dispatchAddPuzzle(old: State, {Puzzles}: Action){
-    return {...old, Puzzles:[...old.Puzzles, ...Puzzles]}
+function dispatchAddPuzzle(old: State, {Puzzles}: Action) {
+    //TODO not idempotent, check duplicate doesn't exist first
+    return {...old, Puzzles: [...old.Puzzles, ...Puzzles]}
 }
 
-function dispatchRemovePuzzle(old: State, {PuzzleIdx}: Action){
-    return {...old, Puzzles:old.Puzzles.filter((_, idx) => idx !== PuzzleIdx)}
+function dispatchRemovePuzzle(old: State, {PuzzleIdx}: Action) {
+    return {...old, Puzzles: old.Puzzles.filter((_, idx) => idx !== PuzzleIdx)}
 }
 
-function dispatchOrientation(old: State, {Orientation}: Action){
-    return {...old, Orientation:Orientation}
+function dispatchOrientation(old: State, {Orientation}: Action) {
+    return {...old, Orientation: Orientation}
+}
+
+function dispatchInput(old: State, {Input}: Action) {
+    return {...old, Input: Input}
 }
 
 
 export function Reducer(old: State, action: Action): State {
-    if (action.Fen !== undefined){
+    console.log("Dispatching action: ", action)
+    console.log("On state: ", old)
+    if (action.Fen !== undefined) {
         return dispatchBoardState(old, action);
-    } else if (action.PuzzleMode !== undefined){
+    } else if (action.PuzzleMode !== undefined) {
         return dispatchPuzzleMode(old, action);
-    } else if (action.Move !== undefined){
+    } else if (action.Move !== undefined) {
         return dispatchMove(old, action);
-    } else if (action.Feedback !== undefined){
+    } else if (action.Feedback !== undefined) {
         return dispatchFeedback(old, action);
-    } else if (action.Puzzles !== undefined){
+    } else if (action.Puzzles !== undefined) {
         return dispatchAddPuzzle(old, action);
-    } else if (action.PuzzleIdx !== undefined){
+    } else if (action.PuzzleIdx !== undefined) {
         return dispatchRemovePuzzle(old, action);
-    } else if (action.Orientation !== undefined){
+    } else if (action.Orientation !== undefined) {
         return dispatchOrientation(old, action);
+    } else if (action.Input !== undefined) {
+        return dispatchInput(old, action);
     } else {
         return old;
     }
 }
 
-function handleFactory(fen: string = 'start'){
-    const Game = new Chess(fen)
-    return function handleMove(move: Mv){
-
-    }
-
-
-}
-
 export function NewState(): State {
     return {
         Game: new Chess(),
-        Fen: 'start',
         Orientation: true,
         CurPuzzle: new Puzzle(new LinearMoveSequence([])),
         Puzzles: [],
         PuzzleMode: false,
         Feedback: 'White to move',
+        Input: ''
     }
 }
