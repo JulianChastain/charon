@@ -37,49 +37,6 @@ class Mv {
     }
 }
 
-type BiMoveIterNode = {
-    Move?: Mv;
-    Next?: () => BiMoveIterNode;
-    Prev?: () => BiMoveIterNode;
-    Container?: MoveSequence;
-    addNext: (Move: Mv) => void;
-    addPrev: (Move: Mv) => void;
-}
-
-class BMIN implements BiMoveIterNode {
-    Move: Mv;
-    Container: MoveSequence;
-
-    constructor(Move: Mv, Container: MoveSequence) {
-        this.Move = Move;
-        this.Container = Container;
-    }
-
-    Next(): BiMoveIterNode {
-        return this.Next();
-    }
-
-    Prev(): BiMoveIterNode {
-        return this.Prev();
-    }
-
-    addNext(Move: Mv): void {
-        this.Next = () => new BMIN(Move, this.Container);
-    }
-
-    addPrev(Move: Mv): void {
-        this.Prev = () => new BMIN(Move, this.Container);
-    }
-}
-
-type MoveExplorer = {
-    Move?: Mv;
-    Next: () => BiMoveIterNode[];
-    Prev: () => BiMoveIterNode[];
-    Sort: MoveSorter;
-}
-
-
 //this is an underlying interface that represents a list of moves
 //Or a DAG of moves. They both need to be able to be used through the same api
 //They need to support standard typescript iteration constructs, and operate as a
@@ -87,6 +44,7 @@ type MoveExplorer = {
 export interface MoveSequence extends Iterable<Mv> {
     Move: BiMoveIterNode;
     Linear: boolean;
+    Sort: MoveSorter;
     Children: (ChosenMove: Mv) => MoveSequence;
     Parents: (ChosenMove?: Mv) => MoveSequence;
     Add: (Move: Mv) => MoveSequence | OutOfSequenceError;
@@ -94,6 +52,102 @@ export interface MoveSequence extends Iterable<Mv> {
     toString: () => string;
     setStrategy: (strategy: MoveSorter) => void;
 }
+
+type BiMoveIterNode = {
+    //Might want to add a first() and last() method
+    Move?: Mv;
+    //Call these multiple times to get different branches
+    Next?: () => BiMoveIterNode;
+    Prev?: () => BiMoveIterNode;
+    addNext: (Move: Mv) => void;
+    //Doesn't really make sense to add a previous move
+    //As it would make it easy to break the DAG constraints
+}
+
+class LMS implements MoveSequence {
+    Moves: Mv[];
+    CurrentMove: number;
+    Move: BiMoveIterNode;
+    Linear: boolean = true;
+    Sort: MoveSorter = (old: BiMoveIterNode[]) => old;
+    setStrategy: (strategy: MoveSorter) => void = (s) => {
+    };
+
+    [Symbol.iterator](): Iterator<Mv> {
+        return {
+            next: (): IteratorResult<Mv> => {
+                if (this.CurrentMove >= this.Moves.length)
+                    return {done: true, value: undefined};
+                return {done: false, value: this.Moves[this.CurrentMove++]};
+            }
+        }
+    }
+
+    Add(Move: Mv): MoveSequence | OutOfSequenceError {
+        if (this.Moves.length !== this.CurrentMove)
+            return "Out of sequence error";
+        this.Moves.push(Move);
+        this.CurrentMove++;
+        return this;
+    }
+
+    Children(ChosenMove: Mv): MoveSequence {
+        if (this.Moves[this.CurrentMove].equals(ChosenMove))
+            this.CurrentMove++;
+        return this;
+    }
+
+    Parents(ChosenMove?: Mv): MoveSequence {
+        if (this.CurrentMove === 0)
+            return this;
+        if (ChosenMove && !this.Moves[this.CurrentMove - 1].equals(ChosenMove))
+            return this;
+        this.CurrentMove--;
+        return this;
+    }
+
+    constructor(moves: Mv[]) {
+        this.Moves = moves
+        this.CurrentMove = 0;
+        if (this.Moves.length > 0)
+            this.Move = new LBMIN(this.Moves[0], this.Moves);
+        else
+            this.Move = new LBMIN(undefined, this.Moves);
+    }
+
+    toString(): string {
+        return this.Moves.map((mv) => mv.toString()).join(",");
+    }
+}
+
+class LBMIN implements BiMoveIterNode {
+    Move?: Mv;
+    Index: number;
+    Container: Mv[];
+
+    constructor(Move: Mv | undefined, Container: Mv[], idx: number = 0) {
+        this.Move = Move;
+        this.Container = Container;
+        this.Index = idx
+    }
+
+    Next(): BiMoveIterNode {
+        if (this.Index >= this.Container.length)
+            return new LBMIN(undefined, this.Container, this.Index);
+        return new LBMIN(this.Container[++this.Index], this.Container, this.Index)
+    }
+
+    Prev(): BiMoveIterNode {
+        if (this.Index <= 0)
+            return new LBMIN(undefined, this.Container, this.Index);
+        return new LBMIN(this.Container[--this.Index], this.Container, this.Index)
+    }
+
+    addNext(Move: Mv): void {
+        this.Next = () => new LBMIN(Move, this.Container);
+    }
+}
+
 
 class GeneralMoveSequence implements MoveSequence {
     Move: BiMoveIterNode;
@@ -104,7 +158,7 @@ class GeneralMoveSequence implements MoveSequence {
         return {
             next: (): IteratorResult<Mv> => {
                 // @ts-ignore
-                if (this.Move && this.Move.Move && this.Move.Next()){
+                if (this.Move && this.Move.Move && this.Move.Next()) {
                     return {done: false, value: new Mv(this.Move.Move.from, this.Move.Move.to)};
                 }
                 return {done: true, value: undefined};
@@ -121,7 +175,7 @@ class GeneralMoveSequence implements MoveSequence {
     }
 
     Children(ChosenMove: Mv): MoveSequence | OutOfSequenceError {
-        if (this.Moves.has(ChosenMove))
+        if (this.Move.Move ?? this.Move.Move.equals(ChosenMove))
             return this.Moves.get(ChosenMove);
         return "Out of sequence error";
     }
