@@ -20,7 +20,7 @@ class Mv {
             .moves({verbose: true})
             .filter(({from, to}) => from === this.from && to === this.to)
             .reduce((m1: Move, m2: Move) => m2, DUMMY_MOVE)
-        return trueMove == DUMMY_MOVE ? false : trueMove;
+        return trueMove === DUMMY_MOVE ? false : trueMove;
     }
 
     san(game: Chess): string {
@@ -41,12 +41,15 @@ class Mv {
 //Or a DAG of moves. They both need to be able to be used through the same api
 //They need to support standard typescript iteration constructs, and operate as a
 //Map<Move,Map> for both cases
-export interface MoveSequence extends Iterable<Mv> {
+export interface MoveSequence extends Array<Mv> {
+    //I don't know if supporting the iterable protocol means I can index in and get .length
     Move: BiMoveIterNode;
     Linear: boolean;
     Sort: MoveSorter;
     Children: (ChosenMove: Mv) => MoveSequence;
     Parents: (ChosenMove?: Mv) => MoveSequence;
+    //Might want to add a first() and last() BiMoveIterNode method that returns the root or a leaf
+    //Add may not be needed up here as it duplicates the responsibility from BMIN
     Add: (Move: Mv) => MoveSequence | OutOfSequenceError;
     //Returns pgn
     toString: () => string;
@@ -54,7 +57,7 @@ export interface MoveSequence extends Iterable<Mv> {
 }
 
 type BiMoveIterNode = {
-    //Might want to add a first() and last() method
+    //Might want to add a first() and last() bool method
     Move?: Mv;
     //Call these multiple times to get different branches
     Next?: () => BiMoveIterNode;
@@ -64,35 +67,25 @@ type BiMoveIterNode = {
     //As it would make it easy to break the DAG constraints
 }
 
-class LMS implements MoveSequence {
-    Moves: Mv[];
+class LMS extends Array<Mv> implements MoveSequence {
     CurrentMove: number;
     Move: BiMoveIterNode;
+
+    //These three aren't used
     Linear: boolean = true;
     Sort: MoveSorter = (old: BiMoveIterNode[]) => old;
-    setStrategy: (strategy: MoveSorter) => void = (s) => {
-    };
-
-    [Symbol.iterator](): Iterator<Mv> {
-        return {
-            next: (): IteratorResult<Mv> => {
-                if (this.CurrentMove >= this.Moves.length)
-                    return {done: true, value: undefined};
-                return {done: false, value: this.Moves[this.CurrentMove++]};
-            }
-        }
-    }
+    setStrategy: (strategy: MoveSorter) => void = (s) => undefined;
 
     Add(Move: Mv): MoveSequence | OutOfSequenceError {
-        if (this.Moves.length !== this.CurrentMove)
+        if (this.length !== this.CurrentMove)
             return "Out of sequence error";
-        this.Moves.push(Move);
+        this.push(Move);
         this.CurrentMove++;
         return this;
     }
 
     Children(ChosenMove: Mv): MoveSequence {
-        if (this.Moves[this.CurrentMove].equals(ChosenMove))
+        if (this[this.CurrentMove].equals(ChosenMove))
             this.CurrentMove++;
         return this;
     }
@@ -100,23 +93,29 @@ class LMS implements MoveSequence {
     Parents(ChosenMove?: Mv): MoveSequence {
         if (this.CurrentMove === 0)
             return this;
-        if (ChosenMove && !this.Moves[this.CurrentMove - 1].equals(ChosenMove))
+        if (ChosenMove && !this[this.CurrentMove - 1].equals(ChosenMove))
             return this;
         this.CurrentMove--;
         return this;
     }
 
-    constructor(moves: Mv[]) {
-        this.Moves = moves
+    constructor(movesParam: Mv[] | number) {
+        if (typeof movesParam === 'number') {
+            // @ts-ignore
+            super(movesParam)
+        } else {
+            // @ts-ignore
+            super(...movesParam);
+        }
         this.CurrentMove = 0;
-        if (this.Moves.length > 0)
-            this.Move = new LBMIN(this.Moves[0], this.Moves);
+        if (this.length > 0)
+            this.Move = new LBMIN(this[0], this);
         else
-            this.Move = new LBMIN(undefined, this.Moves);
+            this.Move = new LBMIN(undefined, this);
     }
 
     toString(): string {
-        return this.Moves.map((mv) => mv.toString()).join(",");
+        return this.map((mv) => mv.toString()).join(",");
     }
 }
 
@@ -148,105 +147,27 @@ class LBMIN implements BiMoveIterNode {
     }
 }
 
-
-class GeneralMoveSequence implements MoveSequence {
-    Move: BiMoveIterNode;
-    Linear: boolean = false;
-    Strategy: MoveSorter;
-
-    [Symbol.iterator](): Iterator<Mv> {
-        return {
-            next: (): IteratorResult<Mv> => {
-                // @ts-ignore
-                if (this.Move && this.Move.Move && this.Move.Next()) {
-                    return {done: false, value: new Mv(this.Move.Move.from, this.Move.Move.to)};
-                }
-                return {done: true, value: undefined};
-            }
-        }
-    }
-
-    Add(Move: Mv): MoveSequence | OutOfSequenceError {
-        if (this.Move.Move.equals(Move))
-            return this.Moves.get(Move);
-        const newSeq = new GeneralMoveSequence();
-        this.Moves.set(Move, newSeq);
-        return newSeq;
-    }
-
-    Children(ChosenMove: Mv): MoveSequence | OutOfSequenceError {
-        if (this.Move.Move ?? this.Move.Move.equals(ChosenMove))
-            return this.Moves.get(ChosenMove);
-        return "Out of sequence error";
-    }
-
-    constructor() {
-        this.Moves = new Map<Mv, MoveSequence>();
-        this.Move = {};
-        this.Strategy = (old) => old;
-    }
-
-    toString(): string {
-        return "Not implemented";
-    }
-
-    addNext(Move: Mv): void {
-        const newSeq = new GeneralMoveSequence();
-        this.Moves.set(Move, newSeq);
-    }
-
-    setStrategy(strategy: MoveSorter): void {
-        this.Strategy = strategy;
-    }
-
+export type Turn = {
+    White?: Mv;
+    Black?: Mv;
 }
 
-
-class LinearMoveSequence implements MoveSequence {
-    Moves: Mv[];
-    CurrentMove: number;
-    Move: BiMoveIterNode;
-    Linear: boolean = true;
-
-    [Symbol.iterator](): Iterator<Mv> {
-        return {
-            next: (): IteratorResult<Mv> => {
-                if (this.CurrentMove >= this.Moves.length)
-                    return {done: true, value: undefined};
-                return {done: false, value: this.Moves[this.CurrentMove++]};
-            }
+export function getTurns(p: Puzzle) {
+    // TODO
+    const game = new Chess(p.startPos);
+    const turns: {White: string, Black: string}[] = []
+    if (game.turn() === 'b') {
+        turns.push({White: "", Black: ""});
+    }
+    for (const move of p.moves) {
+        let san = game.move(move).san;
+        if(game.turn() == 'w'){
+            turns[turns.length - 1].Black = san;
+        } else {
+            turns.push({White: san, Black: ""});
         }
     }
-
-    Add(Move: Mv): MoveSequence | OutOfSequenceError {
-        if (this.Moves.length !== this.CurrentMove)
-            return "Out of sequence error";
-        this.Moves.push(Move);
-        this.CurrentMove++;
-        return this;
-    }
-
-    Children(ChosenMove: Mv): MoveSequence | OutOfSequenceError {
-        if (this.Moves.length <= this.CurrentMove + 1)
-            return "Out of sequence error";
-        if (this.Moves[this.CurrentMove] === ChosenMove)
-            return new LinearMoveSequence(this.Moves, this.CurrentMove + 1);
-        return "Out of sequence error";
-    }
-
-    constructor(moves: Mv[], moveIdx: number = 0) {
-        this.Moves = moves;
-        this.CurrentMove = moveIdx;
-        if (moves.length > moveIdx)
-            this.Move.Move = moves[moveIdx];
-        else
-            this.Move = "Out of sequence error";
-    }
-
-    toString(): string {
-        return this.Moves.map((mv) => mv.from + mv.to).join(" ");
-    }
-
+    return turns
 }
 
 class Puzzle {
@@ -261,6 +182,6 @@ class Puzzle {
     }
 }
 
-export {LinearMoveSequence, Mv, Puzzle};
+export {LMS, LBMIN, Mv, Puzzle};
 
 

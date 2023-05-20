@@ -1,5 +1,5 @@
 import {Chess} from "chess.js";
-import {LinearMoveSequence, Mv, Puzzle} from "./classesAndTypes";
+import {LMS, Mv, Puzzle} from "./classesAndTypes";
 
 export type State = {
     Game: Chess;
@@ -29,7 +29,7 @@ function dispatchBoardState(old: State, {Fen}: Action) {
         if (old.PuzzleMode) {
             // @ts-ignore
             old = dispatchAddPuzzle(old, {Puzzles: [old.CurPuzzle]})
-            old = {...old, CurPuzzle: new Puzzle(new LinearMoveSequence([]), Fen)}
+            old = {...old, CurPuzzle: new Puzzle(new LMS([]), Fen)}
         }
         return {...old, Game: game}
     } catch (e) {
@@ -40,9 +40,11 @@ function dispatchBoardState(old: State, {Fen}: Action) {
 
 function dispatchPuzzleMode(old: State, {PuzzleMode}: Action) {
     if (PuzzleMode && !old.PuzzleMode) {
-        old = {...old, CurPuzzle: new Puzzle(new LinearMoveSequence([]), old.Game.fen())}
+        // @ts-ignore
+        old = dispatchFeedback(old, {Feedback: 'Enter new puzzle starting from position ' + old.Game.fen()})
+        old = {...old, CurPuzzle: new Puzzle(new LMS([]), old.Game.fen())}
     }
-    return {...old, PuzzleMove: PuzzleMode}
+    return {...old, PuzzleMode: PuzzleMode}
 }
 
 function dispatchMove(old: State, {Move}: Action) {
@@ -50,7 +52,11 @@ function dispatchMove(old: State, {Move}: Action) {
         try {
             old.Game.move(Move);
             console.log('Verified move, new state is ' + old.Game.fen())
-            return {...old, Game: old.Game, Fen: old.Game.fen()}
+            if (old.PuzzleMode) {
+                old.CurPuzzle.moves.Add(Move)
+                return {...old, Game: old.Game, Fen: old.Game.fen(), CurPuzzle: old.CurPuzzle}
+            } else
+                return {...old, Game: old.Game, Fen: old.Game.fen()}
         } catch (e) {
             console.log("Couldn't make the move " + Move.from + Move.to + " in state " + old.Game.fen())
             return old
@@ -112,10 +118,18 @@ export function NewState(): State {
     return {
         Game: new Chess(),
         Orientation: true,
-        CurPuzzle: new Puzzle(new LinearMoveSequence([])),
+        CurPuzzle: new Puzzle(new LMS([])),
         Puzzles: [],
         PuzzleMode: false,
         Feedback: 'White to move',
         Input: ''
     }
+}
+
+export function LastMove(s: State) {
+    return s.Game.history()[s.Game.history().length - 1]
+}
+
+export function LastPuzzleMove(s: State) {
+    return s.CurPuzzle.moves[s.CurPuzzle.moves.length - 1]
 }
