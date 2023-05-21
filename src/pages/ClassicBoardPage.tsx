@@ -47,7 +47,12 @@ export function BoardPage(): JSX.Element {
                             dispatch({PuzzleMode: true});
                         }}>Start Puzzle
                         </button>
-                        <button className="bg-nord7 text-nord0 px-2 py-2 rounded ml-2">Finish Puzzle</button>
+                        <button className="bg-nord7 text-nord0 px-2 py-2 rounded ml-2" onClick={() => {
+                            // @ts-ignore
+                            dispatch({Puzzles: [state.CurPuzzle]})
+                            // @ts-ignore
+                            dispatch({PuzzleMode: false});
+                        }}>Finish Puzzle</button>
                         <button className="bg-nord7 text-nord0 px-2 py-2 rounded ml-2">Load Puzzle</button>
                     </div>
                 </div>
