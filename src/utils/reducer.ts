@@ -1,19 +1,26 @@
 import {Chess} from "chess.js";
 import {LMS, Mv, Puzzle} from "./classesAndTypes";
 
+export enum Mode {
+    Sandbox = "Sandbox",
+    EnterPuzzle = "Enter Puzzle",
+    AttemptPuzzle = "Attempt Puzzle",
+}
+
 export type State = {
     Game: Chess;
     Orientation: boolean;
     CurPuzzle: Puzzle;
     Puzzles: Puzzle[];
-    PuzzleMode: boolean;
+    //TODO implement this as an enum
+    PuzzleMode: Mode;
     Feedback: string;
     Input: string;
 }
 
 export type Action = {
     Fen: string;
-    PuzzleMode: boolean;
+    PuzzleMode: Mode;
     Move: Mv;
     Feedback: string;
     Puzzles: Puzzle[];
@@ -26,7 +33,7 @@ function dispatchBoardState(old: State, {Fen}: Action) {
     try {
         const game = new Chess(Fen)
         console.log("FEN is valid")
-        if (old.PuzzleMode) {
+        if (old.PuzzleMode === Mode.EnterPuzzle) {
             // @ts-ignore
             old = dispatchAddPuzzle(old, {Puzzles: [old.CurPuzzle]})
             old = {...old, CurPuzzle: new Puzzle(new LMS([]), Fen)}
@@ -34,16 +41,17 @@ function dispatchBoardState(old: State, {Fen}: Action) {
         return {...old, Game: game}
     } catch (e) {
         // @ts-ignore
-        return dispatchFeedback(old, {Feedback: error})
+        return dispatchFeedback(old, {Feedback: e})
     }
 }
 
 function dispatchPuzzleMode(old: State, {PuzzleMode}: Action) {
-    if (PuzzleMode && !old.PuzzleMode) {
+    if (PuzzleMode === Mode.EnterPuzzle && old.PuzzleMode !== Mode.EnterPuzzle) {
         // @ts-ignore
         old = dispatchFeedback(old, {Feedback: 'Enter new puzzle starting from position ' + old.Game.fen()})
         old = {...old, CurPuzzle: new Puzzle(new LMS([]), old.Game.fen())}
     }
+    //Both should be a Mode enum
     return {...old, PuzzleMode: PuzzleMode}
 }
 
@@ -52,7 +60,7 @@ function dispatchMove(old: State, {Move}: Action) {
         try {
             old.Game.move(Move);
             console.log('Verified move, new state is ' + old.Game.fen())
-            if (old.PuzzleMode) {
+            if (old.PuzzleMode === Mode.EnterPuzzle) {
                 old.CurPuzzle.moves.Add(Move)
                 return {...old, Game: old.Game, Fen: old.Game.fen(), CurPuzzle: old.CurPuzzle}
             } else
@@ -91,27 +99,34 @@ function dispatchInput(old: State, {Input}: Action) {
 
 
 export function Reducer(old: State, action: Action): State {
+    //TODO add specializer functions or types so I can call this with type safety
     console.log("Dispatching action: ", action)
     console.log("On state: ", old)
     if (action.Fen !== undefined) {
-        return dispatchBoardState(old, action);
-    } else if (action.PuzzleMode !== undefined) {
-        return dispatchPuzzleMode(old, action);
-    } else if (action.Move !== undefined) {
-        return dispatchMove(old, action);
-    } else if (action.Feedback !== undefined) {
-        return dispatchFeedback(old, action);
-    } else if (action.Puzzles !== undefined) {
-        return dispatchAddPuzzle(old, action);
-    } else if (action.PuzzleIdx !== undefined) {
-        return dispatchRemovePuzzle(old, action);
-    } else if (action.Orientation !== undefined) {
-        return dispatchOrientation(old, action);
-    } else if (action.Input !== undefined) {
-        return dispatchInput(old, action);
-    } else {
-        return old;
+        old = dispatchBoardState(old, action);
     }
+    if (action.PuzzleMode !== undefined) {
+        old = dispatchPuzzleMode(old, action);
+    }
+    if (action.Move !== undefined) {
+        old = dispatchMove(old, action);
+    }
+    if (action.Feedback !== undefined) {
+        old = dispatchFeedback(old, action);
+    }
+    if (action.Puzzles !== undefined) {
+        old = dispatchAddPuzzle(old, action);
+    }
+    if (action.PuzzleIdx !== undefined) {
+        old = dispatchRemovePuzzle(old, action);
+    }
+    if (action.Orientation !== undefined) {
+        old = dispatchOrientation(old, action);
+    }
+    if (action.Input !== undefined) {
+        old = dispatchInput(old, action);
+    }
+    return old;
 }
 
 export function NewState(): State {
@@ -120,7 +135,7 @@ export function NewState(): State {
         Orientation: true,
         CurPuzzle: new Puzzle(new LMS([])),
         Puzzles: [],
-        PuzzleMode: false,
+        PuzzleMode: Mode.Sandbox,
         Feedback: 'White to move',
         Input: ''
     }

@@ -1,7 +1,7 @@
 import {Chessboard} from "react-chessboard";
 import React from "react";
 import {AppContext} from "../pages/ClassicBoardPage";
-import {defaultHandler} from "../utils/moveHandler";
+import {MoveHandlerBuilder} from "../utils/moveHandler";
 
 
 export function GameBoard(): JSX.Element {
@@ -10,6 +10,8 @@ export function GameBoard(): JSX.Element {
     return (
         <Chessboard
             position={state.Game.fen()}
-            onPieceDrop={defaultHandler(state, dispatch)}/>
+            onPieceDrop={new MoveHandlerBuilder(state, dispatch).handler}
+            boardOrientation={state.Orientation ? "white" : "black"}
+        />
     );
 }

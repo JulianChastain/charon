@@ -2,6 +2,8 @@ import React, {createContext, useReducer} from "react";
 import {Action, NewState, Reducer} from "../utils/reducer";
 import {GameBoard} from "../components/GameBoard";
 import {MoveTable} from "../components/MoveTable";
+import {PuzzleList} from "../components/PuzzleList";
+import {Mode} from "../utils/reducer";
 
 export const AppContext = createContext({
     state: NewState(), dispatch: (action: Action) => {
@@ -20,8 +22,9 @@ export function BoardPage(): JSX.Element {
                     <div className="mb-5 p-5 border border-nord13 rounded">
                         {state.Feedback}
                     </div>
-                    <div className="mb-5">
+                    <div className="mb-5 flex space-x-12 mx-12">
                         <MoveTable/>
+                        <PuzzleList/>
                     </div>
                     <div className="mb-5">
                         <input
@@ -44,16 +47,22 @@ export function BoardPage(): JSX.Element {
                             // @ts-ignore
                             dispatch({Fen: state.Game.fen()});
                             // @ts-ignore
-                            dispatch({PuzzleMode: true});
+                            dispatch({PuzzleMode: Mode.EnterPuzzle});
                         }}>Start Puzzle
                         </button>
                         <button className="bg-nord7 text-nord0 px-2 py-2 rounded ml-2" onClick={() => {
                             // @ts-ignore
                             dispatch({Puzzles: [state.CurPuzzle]})
                             // @ts-ignore
-                            dispatch({PuzzleMode: false});
-                        }}>Finish Puzzle</button>
+                            dispatch({PuzzleMode: Mode.Sandbox});
+                        }}>Finish Puzzle
+                        </button>
                         <button className="bg-nord7 text-nord0 px-2 py-2 rounded ml-2">Load Puzzle</button>
+                        <button className="bg-nord7 text-nord0 px-2 py-2 rounded ml-2" onClick={() => {
+                            // @ts-ignore
+                            dispatch({Orientation: !state.Orientation})
+                        }}>Flip Board
+                        </button>
                     </div>
                 </div>
             </div>

@@ -7,6 +7,7 @@ const DUMMY_MOVE: Move = (new Chess()).moves({verbose: true})[0];
 
 //Type containing a square and ending square
 class Mv {
+    //TODO convert class to type
     from: Square;
     to: Square;
 
@@ -15,6 +16,7 @@ class Mv {
         this.to = to;
     }
 
+    //TODO change all of these from methods to functions
     fullMove(game: Chess): Move | false {
         const trueMove: Move = game
             .moves({verbose: true})
@@ -153,7 +155,6 @@ export type Turn = {
 }
 
 export function getTurns(p: Puzzle) {
-    // TODO
     const game = new Chess(p.startPos);
     const turns: {White: string, Black: string}[] = []
     if (game.turn() === 'b') {
@@ -161,7 +162,7 @@ export function getTurns(p: Puzzle) {
     }
     for (const move of p.moves) {
         let san = game.move(move).san;
-        if(game.turn() == 'w'){
+        if(game.turn() === 'w'){
             turns[turns.length - 1].Black = san;
         } else {
             turns.push({White: san, Black: ""});
